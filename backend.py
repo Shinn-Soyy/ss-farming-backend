@@ -46,6 +46,10 @@ def init_db():
                       mission_type TEXT, 
                       completed BOOLEAN DEFAULT FALSE,
                       PRIMARY KEY (user_id, mission_type))''')
+        # Check if hash_rate column exists, if not add it
+        c.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'hash_rate'")
+        if not c.fetchone():
+            c.execute("ALTER TABLE users ADD COLUMN hash_rate INTEGER DEFAULT 2")
         conn.commit()
     except Exception as e:
         print(f"Error initializing database: {e}")
@@ -117,7 +121,7 @@ def get_user():
         if user[3]:  # farm_active
             last_farm = user[4]  # last_farm timestamp
             if last_farm:
-                last_farm = datetime.strptime(last_farm, '%Y-%m-%d %H:%M:%S.%f')
+                last_farm = datetime.strptime(str(last_farm), '%Y-%m-%d %H:%M:%S.%f')
                 now = datetime.utcnow()
                 seconds_passed = (now - last_farm).total_seconds()
                 balance_increase = int(seconds_passed * user[2] / 3600)  # hash_rate per hour
@@ -173,7 +177,7 @@ def claim():
         # Stop farming and update balance
         last_farm = user[4]
         if last_farm:
-            last_farm = datetime.strptime(last_farm, '%Y-%m-%d %H:%M:%S.%f')
+            last_farm = datetime.strptime(str(last_farm), '%Y-%m-%d %H:%M:%S.%f')
             now = datetime.utcnow()
             seconds_passed = (now - last_farm).total_seconds()
             balance_increase = int(seconds_passed * user[2] / 3600)  # hash_rate per hour
