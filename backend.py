@@ -19,7 +19,14 @@ def init_db():
                       balance INTEGER DEFAULT 0, 
                       hash_rate INTEGER DEFAULT 2, 
                       farm_active BOOLEAN DEFAULT FALSE, 
-                      last_farm TIMESTAMP)''')
+                      last_farm TIMESTAMP,
+                      wallet_address TEXT)''')
+        # Create missions table if it doesn't exist
+        c.execute('''CREATE TABLE IF NOT EXISTS missions
+                     (user_id TEXT, 
+                      mission_type TEXT, 
+                      completed BOOLEAN DEFAULT FALSE,
+                      PRIMARY KEY (user_id, mission_type))''')
         conn.commit()
         conn.close()
     except Exception as e:
@@ -100,7 +107,9 @@ def get_user():
                 "user_id": user[0],
                 "balance": user[1],
                 "hash_rate": user[2],
-                "farm_active": user[3]
+                "farm_active": user[3],
+                "wallet_address": user[5] if user[5] else "Not linked",
+                "ton": user[1] * 0.0000001  # Calculate TON on the backend
             }
         })
     
@@ -203,6 +212,109 @@ def boost():
         conn.commit()
         conn.close()
         return jsonify({"status": "success", "message": f"Hash rate boosted to {new_hash_rate} GH/s"})
+    
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/update_wallet', methods=['POST'])
+def update_wallet():
+    try:
+        data = request.get_json()
+        user_id = str(data.get('user_id'))
+        wallet_address = data.get('wallet_address')
+        if not user_id or not wallet_address:
+            return jsonify({"status": "error", "message": "user_id and wallet_address are required"}), 400
+        
+        conn = psycopg2.connect(DATABASE_URL)
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+        user = c.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        c.execute("UPDATE users SET wallet_address = %s WHERE user_id = %s", (wallet_address, user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": "Wallet address updated", "wallet_address": wallet_address})
+    
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/referral', methods=['GET'])
+def get_referral():
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id is required"}), 400
+        
+        referral_link = f"https://t.me/SS_FarmingBot?start={user_id}"
+        return jsonify({"status": "success", "referral_link": referral_link})
+    
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/missions', methods=['GET'])
+def get_missions():
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id is required"}), 400
+        
+        conn = psycopg2.connect(DATABASE_URL)
+        c = conn.cursor()
+        c.execute("SELECT mission_type, completed FROM missions WHERE user_id = %s", (user_id,))
+        completed_missions = c.fetchall()
+        completed_mission_types = [m[0] for m in completed_missions if m[1]]
+        
+        missions = [
+            {"name": "Join Channel", "mission_type": "join_channel", "reward": 500, "link": "https://t.me/ss_farming_channel"}
+        ]
+        
+        mission_data = []
+        for mission in missions:
+            mission_data.append({
+                "name": mission["name"],
+                "reward": mission["reward"],
+                "link": mission["link"],
+                "status": "Completed" if mission["mission_type"] in completed_mission_types else "Not Completed"
+            })
+        
+        conn.close()
+        return jsonify({"status": "success", "missions": mission_data})
+    
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/complete_mission', methods=['POST'])
+def complete_mission():
+    try:
+        data = request.get_json()
+        user_id = str(data.get('user_id'))
+        mission_type = data.get('mission_type')
+        if not user_id or not mission_type:
+            return jsonify({"status": "error", "message": "user_id and mission_type are required"}), 400
+        
+        conn = psycopg2.connect(DATABASE_URL)
+        c = conn.cursor()
+        # Check if mission is already completed
+        c.execute("SELECT completed FROM missions WHERE user_id = %s AND mission_type = %s", (user_id, mission_type))
+        mission = c.fetchone()
+        if mission and mission[0]:
+            conn.close()
+            return jsonify({"status": "error", "message": "Mission already completed"}), 400
+        
+        # Mark mission as completed
+        c.execute("INSERT INTO missions (user_id, mission_type, completed) VALUES (%s, %s, %s) ON CONFLICT (user_id, mission_type) DO UPDATE SET completed = %s",
+                  (user_id, mission_type, True, True))
+        
+        # Add reward to user's balance
+        reward = 500 if mission_type == "join_channel" else 0
+        c.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (reward, user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": f"Mission completed! You earned {reward} SS Points"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
