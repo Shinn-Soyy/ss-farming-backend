@@ -41,15 +41,15 @@ MISSIONS = [
     {
         "mission_type": "join_channel",
         "name": "Join Our Telegram Channel",
-        "link": "https://t.me/SS_Communitys",  # Replace with your actual channel link
-        "reward": 100,  # SS Points reward for completing the mission
+        "link": "https://t.me/your_channel",  # Replace with your actual channel link
+        "reward": 50,  # SS Points reward for completing the mission
         "status": "Not Completed"
     },
     {
         "mission_type": "invite_friend",
         "name": "Invite a Friend",
         "link": "",  # Will be set dynamically via referral link
-        "reward": 50,  # SS Points reward for completing the mission
+        "reward": 100,  # SS Points reward for completing the mission
         "status": "Not Completed"
     }
 ]
@@ -120,7 +120,7 @@ def get_user():
             last_farm = datetime.fromisoformat(user["last_farm"])
             now = datetime.utcnow()
             seconds_passed = (now - last_farm).total_seconds()
-            balance_increase = int(seconds_passed * user["hash_rate"] / 3600)  # hash_rate per hour
+            balance_increase = seconds_passed * user["hash_rate"]  # hash_rate per second
             user["balance"] += balance_increase
             user["last_farm"] = now.isoformat()
             save_users(users)
@@ -161,12 +161,12 @@ def claim():
             last_farm = datetime.fromisoformat(user["last_farm"])
             now = datetime.utcnow()
             seconds_passed = (now - last_farm).total_seconds()
-            balance_increase = int(seconds_passed * user["hash_rate"] / 3600)  # hash_rate per hour
+            balance_increase = seconds_passed * user["hash_rate"]  # hash_rate per second
             user["balance"] += balance_increase
             user["farm_active"] = False
             user["last_farm"] = None
             save_users(users)
-            return jsonify({"status": "success", "message": f"Claimed {balance_increase} SS Points"})
+            return jsonify({"status": "success", "message": f"Claimed {balance_increase.toFixed(2)} SS Points"})
         else:
             return jsonify({"status": "error", "message": "No farming data available"}), 400
     
@@ -211,10 +211,10 @@ def boost():
             return jsonify({"status": "error", "message": "User not found"}), 404
         
         user = users[user_id]
-        # Increase hash_rate (e.g., +1 GH/s per boost)
-        user["hash_rate"] += 1
+        # Increase hash_rate (e.g., +0.1 GH/s per boost)
+        user["hash_rate"] += 0.1
         save_users(users)
-        return jsonify({"status": "success", "message": f"Hash rate boosted to {user['hash_rate']} GH/s"})
+        return jsonify({"status": "success", "message": f"Hash rate boosted to {user['hash_rate'].toFixed(1)} GH/s"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
