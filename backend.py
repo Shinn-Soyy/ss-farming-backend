@@ -1,17 +1,36 @@
 import os
 import psycopg2
+from psycopg2.pool import SimpleConnectionPool
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Get database URL from environment variable
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# Initialize connection pool
+try:
+    db_pool = SimpleConnectionPool(
+        1,  # Minimum number of connections
+        10,  # Maximum number of connections
+        dsn=DATABASE_URL
+    )
+except Exception as e:
+    print(f"Error initializing connection pool: {e}")
+    db_pool = None
+
 # Database initialization
 def init_db():
+    if not db_pool:
+        print("Connection pool not initialized")
+        return
+    
+    conn = None
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = db_pool.getconn()
         c = conn.cursor()
         # Create users table if it doesn't exist
         c.execute('''CREATE TABLE IF NOT EXISTS users
@@ -28,56 +47,66 @@ def init_db():
                       completed BOOLEAN DEFAULT FALSE,
                       PRIMARY KEY (user_id, mission_type))''')
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"Error initializing database: {e}")
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 # Call init_db when the app starts
 init_db()
 
 @app.route('/api/register', methods=['POST'])
 def register_user():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         # Check if user already exists
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         if user:
-            conn.close()
+            conn.commit()
             return jsonify({"status": "success", "message": "User already registered"})
         
         # Register new user
         c.execute("INSERT INTO users (user_id, balance, hash_rate, farm_active) VALUES (%s, %s, %s, %s)",
                   (user_id, 0, 2, False))
         conn.commit()
-        conn.close()
         return jsonify({"status": "success", "message": "User registered successfully"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/user', methods=['GET'])
 def get_user():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         user_id = request.args.get('user_id')
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         
         if not user:
-            conn.close()
             # If user not found, register them
-            c = conn.cursor()
             c.execute("INSERT INTO users (user_id, balance, hash_rate, farm_active) VALUES (%s, %s, %s, %s)",
                       (user_id, 0, 2, False))
             conn.commit()
@@ -100,7 +129,6 @@ def get_user():
                 c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
                 user = c.fetchone()
         
-        conn.close()
         return jsonify({
             "status": "success",
             "user": {
@@ -115,26 +143,31 @@ def get_user():
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/claim', methods=['POST'])
 def claim():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         
         if not user:
-            conn.close()
             return jsonify({"status": "error", "message": "User not found"}), 404
         
         if not user[3]:  # farm_active
-            conn.close()
             return jsonify({"status": "error", "message": "Farming is not active"}), 400
         
         # Stop farming and update balance
@@ -148,34 +181,37 @@ def claim():
             c.execute("UPDATE users SET balance = %s, farm_active = %s, last_farm = NULL WHERE user_id = %s",
                       (new_balance, False, user_id))
             conn.commit()
-            conn.close()
             return jsonify({"status": "success", "message": f"Claimed {balance_increase} SS Points"})
         else:
-            conn.close()
             return jsonify({"status": "error", "message": "No farming data available"}), 400
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/farm', methods=['POST'])
 def farm():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         
         if not user:
-            conn.close()
             return jsonify({"status": "error", "message": "User not found"}), 404
         
         if user[3]:  # farm_active
-            conn.close()
             return jsonify({"status": "error", "message": "Farming is already active"}), 400
         
         # Start farming
@@ -183,64 +219,76 @@ def farm():
         c.execute("UPDATE users SET farm_active = %s, last_farm = %s WHERE user_id = %s",
                   (True, now, user_id))
         conn.commit()
-        conn.close()
         return jsonify({"status": "success", "message": "Farming started"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/boost', methods=['POST'])
 def boost():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         
         if not user:
-            conn.close()
             return jsonify({"status": "error", "message": "User not found"}), 404
         
         # Increase hash_rate (e.g., +1 GH/s per boost)
         new_hash_rate = user[2] + 1
         c.execute("UPDATE users SET hash_rate = %s WHERE user_id = %s", (new_hash_rate, user_id))
         conn.commit()
-        conn.close()
         return jsonify({"status": "success", "message": f"Hash rate boosted to {new_hash_rate} GH/s"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/update_wallet', methods=['POST'])
 def update_wallet():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         wallet_address = data.get('wallet_address')
         if not user_id or not wallet_address:
             return jsonify({"status": "error", "message": "user_id and wallet_address are required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = c.fetchone()
         
         if not user:
-            conn.close()
             return jsonify({"status": "error", "message": "User not found"}), 404
         
         c.execute("UPDATE users SET wallet_address = %s WHERE user_id = %s", (wallet_address, user_id))
         conn.commit()
-        conn.close()
         return jsonify({"status": "success", "message": "Wallet address updated", "wallet_address": wallet_address})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/referral', methods=['GET'])
 def get_referral():
@@ -257,12 +305,16 @@ def get_referral():
 
 @app.route('/api/missions', methods=['GET'])
 def get_missions():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         user_id = request.args.get('user_id')
         if not user_id:
             return jsonify({"status": "error", "message": "user_id is required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         c.execute("SELECT mission_type, completed FROM missions WHERE user_id = %s", (user_id,))
         completed_missions = c.fetchall()
@@ -281,28 +333,33 @@ def get_missions():
                 "status": "Completed" if mission["mission_type"] in completed_mission_types else "Not Completed"
             })
         
-        conn.close()
         return jsonify({"status": "success", "missions": mission_data})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/api/complete_mission', methods=['POST'])
 def complete_mission():
+    if not db_pool:
+        return jsonify({"status": "error", "message": "Database connection not available"}), 500
+    
+    conn = None
     try:
+        conn = db_pool.getconn()
         data = request.get_json()
         user_id = str(data.get('user_id'))
         mission_type = data.get('mission_type')
         if not user_id or not mission_type:
             return jsonify({"status": "error", "message": "user_id and mission_type are required"}), 400
         
-        conn = psycopg2.connect(DATABASE_URL)
         c = conn.cursor()
         # Check if mission is already completed
         c.execute("SELECT completed FROM missions WHERE user_id = %s AND mission_type = %s", (user_id, mission_type))
         mission = c.fetchone()
         if mission and mission[0]:
-            conn.close()
             return jsonify({"status": "error", "message": "Mission already completed"}), 400
         
         # Mark mission as completed
@@ -313,11 +370,13 @@ def complete_mission():
         reward = 500 if mission_type == "join_channel" else 0
         c.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (reward, user_id))
         conn.commit()
-        conn.close()
         return jsonify({"status": "success", "message": f"Mission completed! You earned {reward} SS Points"})
     
     except Exception as e:
         return jsonify({"status": "error", "message": f"Server error: {str(e)}"}), 500
+    finally:
+        if conn:
+            db_pool.putconn(conn)
 
 @app.route('/')
 def home():
