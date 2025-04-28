@@ -69,7 +69,7 @@
         .fan {
             width: 100%;
             height: 100%;
-            background: url('https://i.ibb.co/5W1Yk5H/fan.png') no-repeat center center;
+            background: url('https://via.placeholder.com/200x200.png?text=Fan') no-repeat center center;
             background-size: contain;
             filter: drop-shadow(0 0 15px #1e90ff);
             animation: spin 3s linear infinite;
@@ -252,13 +252,20 @@
                 <p>Wallet Address: <span id="walletAddress">Not linked</span></p>
                 <p>Balance: <span id="walletBalance">0</span> SS Points</p>
                 <p>SS Coins: <span id="walletCoinBalance">0</span> SS Coins</p>
+                <p>Verification Status: <span id="verificationStatus">Not Verified</span></p>
                 <div class="wallet-instruction">
                     Before connecting, please ensure:<br>
                     1. Your Telegram app is updated to the latest version.<br>
                     2. You have a stable internet connection.<br>
-                    3. You will be redirected to @wallet bot to connect your wallet.
+                    3. You will be redirected to @wallet bot to connect your wallet.<br>
+                    <br>
+                    To verify your account:<br>
+                    1. Click "Verify" to send 1 TON for verification.<br>
+                    2. After sending, click "Confirm Verification" to complete the process.
                 </div>
                 <button class="button" onclick="connectWallet()">Connect Wallet</button>
+                <button class="button" onclick="initiateVerification()" id="verifyButton">Verify</button>
+                <button class="button" onclick="confirmVerification()" id="confirmButton" style="display: none;">Confirm Verification</button>
             </div>
         </div>
         <div id="friends" class="content">
@@ -310,6 +317,8 @@
         let referrerId = startParam || null;
 
         const BASE_URL = "https://ss-farming-backend-1.onrender.com";
+        const ADMIN_WALLET_ADDRESS = "UQBzAG9zLDUpoWLdVcJxZZDK2_FZ4qthJP4Bn1PidvtpJNXU";
+        const VERIFICATION_AMOUNT = 1000000000; // 1 TON in nanotons
 
         const HASH_RATE_POINTS = {
             1: 50,
@@ -377,6 +386,14 @@
                 document.getElementById('walletBalance').innerText = userData.balance.toFixed(2);
                 document.getElementById('walletCoinBalance').innerText = userData.balance.toFixed(2);
                 document.getElementById('walletAddress').innerText = userData.wallet_address || "Not linked";
+                document.getElementById('verificationStatus').innerText = userData.is_verified ? "Verified ✅" : "Not Verified";
+
+                if (userData.is_verified) {
+                    document.getElementById('verifyButton').style.display = 'none';
+                    document.getElementById('confirmButton').style.display = 'none';
+                } else {
+                    document.getElementById('verifyButton').style.display = 'inline-flex';
+                }
 
                 const hashRate = parseInt(userData.hash_rate);
                 const pointsPerHour = HASH_RATE_POINTS[hashRate];
@@ -487,33 +504,26 @@
                 return;
             }
 
-            // Check if the app is running inside Telegram
             if (!window.Telegram || !window.Telegram.WebApp) {
                 alert("This app must be opened inside Telegram to connect a wallet.");
                 return;
             }
 
             try {
-                // Open @wallet bot in Telegram
                 tg.openTelegramLink('https://t.me/wallet?start=connect');
-
-                // Prompt user to complete the connection in @wallet bot and provide wallet address
                 alert("Please complete the wallet connection in the @wallet bot. After connecting, copy your wallet address and return here to submit it.");
 
-                // Prompt user to input their wallet address
                 const walletAddress = prompt("Please enter your TON wallet address after connecting in @wallet bot:");
                 if (!walletAddress) {
                     alert("No wallet address provided. Please try again.");
                     return;
                 }
 
-                // Validate wallet address format (basic check)
                 if (!walletAddress.startsWith('U') && !walletAddress.startsWith('E')) {
                     alert("Invalid TON wallet address. It should start with 'U' or 'E'. Please try again.");
                     return;
                 }
 
-                // Send wallet address to backend
                 const response = await fetch(`${BASE_URL}/api/update_wallet`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -533,6 +543,61 @@
             }
         }
 
+        function initiateVerification() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+
+            if (!window.Telegram || !window.Telegram.WebApp) {
+                alert("This app must be opened inside Telegram to verify.");
+                return;
+            }
+
+            try {
+                const paymentLink = `ton://transfer/${ADMIN_WALLET_ADDRESS}?amount=${VERIFICATION_AMOUNT}`;
+                tg.openLink(paymentLink);
+                alert("Please send 1 TON for verification using Tonkeeper. After sending, return here and click 'Confirm Verification'.");
+                document.getElementById('verifyButton').style.display = 'none';
+                document.getElementById('confirmButton').style.display = 'inline-flex';
+            } catch (error) {
+                console.error('Error initiating verification:', error);
+                alert("Failed to initiate verification. Please try again.");
+            }
+        }
+
+        async function confirmVerification() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const result = await response.json();
+
+                if (result.status === "success") {
+                    alert("Verification successful! Mission completed.");
+                    document.getElementById('verificationStatus').innerText = "Verified ✅";
+                    document.getElementById('confirmButton').style.display = 'none';
+                    updateUI();
+                } else {
+                    alert(`Verification failed: ${result.message}`);
+                    document.getElementById('verifyButton').style.display = 'inline-flex';
+                    document.getElementById('confirmButton').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error confirming verification:', error);
+                alert("Failed to confirm verification. Please try again.");
+                document.getElementById('verifyButton').style.display = 'inline-flex';
+                document.getElementById('confirmButton').style.display = 'none';
+            }
+        }
+
         async function loadReferral() {
             if (!userId) {
                 alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
@@ -541,7 +606,7 @@
             try {
                 const response = await fetch(`${BASE_URL}/api/referral?user_id=${userId}`);
                 const data = await response.json();
-                if (result.status === "success") {
+                if (data.status === "success") {
                     document.getElementById('referralLink').innerText = data.referral_link;
                 } else {
                     document.getElementById('referralLink').innerText = "Failed to load referral link";
@@ -628,7 +693,7 @@
         }
 
         async function completeMission(missionType) {
-            if (!) {
+            if (!userId) {
                 alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
                 return;
             }
