@@ -1,0 +1,13 @@
+{
+  "name": "ss-farming-backend",
+  "version": "1.0.0",
+  "description": "Backend for SS Farming Mini App",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "cors": "^2.8.5"
+  }
+}
