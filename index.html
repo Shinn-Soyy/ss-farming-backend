@@ -215,6 +215,12 @@
             color: #1e90ff;
             text-decoration: underline;
         }
+        .wallet-address {
+            word-break: break-all;
+            font-size: 14px;
+            color: #1e90ff;
+            margin: 10px 0;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -257,13 +263,19 @@
                     Before connecting, please ensure:<br>
                     1. Your Telegram app is updated to the latest version.<br>
                     2. You have a stable internet connection.<br>
-                    3. You will be redirected to @wallet bot to connect your wallet.<br>
+                    3. You have Tonkeeper or another TON wallet app installed.<br>
+                    <br>
+                    To connect manually if automatic connection fails:<br>
+                    1. Open Tonkeeper app and copy your wallet address.<br>
+                    2. Click "Connect Wallet" and choose the manual option.<br>
                     <br>
                     To verify your account:<br>
-                    1. Click "Verify" to send 1 TON for verification.<br>
-                    2. After sending, click "Confirm Verification" to complete the process.
+                    1. Click "Verify" to get a payment link.<br>
+                    2. Copy the link, open it in Tonkeeper, and send 1 TON.<br>
+                    3. After sending, click "Confirm Verification" to complete.
                 </div>
-                <button class="button" onclick="connectWallet()">Connect Wallet</button>
+                <button class="button" onclick="connectWallet()" id="connectWalletButton">Connect Wallet</button>
+                <button class="button" onclick="disconnectWallet()" id="disconnectWalletButton" style="display: none;">Disconnect Wallet</button>
                 <button class="button" onclick="initiateVerification()" id="verifyButton">Verify</button>
                 <button class="button" onclick="confirmVerification()" id="confirmButton" style="display: none;">Confirm Verification</button>
             </div>
@@ -308,6 +320,7 @@
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@1.0.0/dist/tonconnect-ui.min.js"></script>
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -344,6 +357,105 @@
             9: { ss_points: 15000, ton: 3.2 },
             10: { ss_points: 20000, ton: 4 }
         };
+
+        // Initialize TON Connect UI
+        let tonConnectUI;
+        try {
+            tonConnectUI = new TONConnectUI({
+                manifestUrl: 'https://raw.githubusercontent.com/Shinn-Soy/ss-farming-frontend/main/tonconnect-manifest.json',
+                buttonRootId: 'connectWalletButton'
+            });
+        } catch (error) {
+            console.error('Error initializing TON Connect UI:', error);
+            alert('Failed to initialize wallet connection. Please try manual connection.');
+        }
+
+        // Handle wallet connection status
+        if (tonConnectUI) {
+            tonConnectUI.onStatusChange(wallet => {
+                if (wallet) {
+                    // Wallet connected
+                    const walletAddress = wallet.account.address;
+                    document.getElementById('walletAddress').innerText = walletAddress;
+                    document.getElementById('connectWalletButton').style.display = 'none';
+                    document.getElementById('disconnectWalletButton').style.display = 'inline-flex';
+                    saveWalletAddress(walletAddress);
+                } else {
+                    // Wallet disconnected
+                    document.getElementById('walletAddress').innerText = 'Not linked';
+                    document.getElementById('connectWalletButton').style.display = 'inline-flex';
+                    document.getElementById('disconnectWalletButton').style.display = 'none';
+                }
+            });
+        }
+
+        async function connectWallet() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+
+            // Try automatic connection first
+            if (tonConnectUI) {
+                try {
+                    await tonConnectUI.connectWallet();
+                    return; // If successful, exit the function
+                } catch (error) {
+                    console.error('Automatic wallet connection error:', error);
+                    alert("Automatic wallet connection failed. Let's try manual connection.\n\nPlease open Tonkeeper, copy your wallet address, and enter it below.");
+                }
+            }
+
+            // Fallback to manual connection
+            const walletAddress = prompt("Please enter your TON wallet address from Tonkeeper:");
+            if (!walletAddress) {
+                alert("No wallet address provided. Please try again.");
+                return;
+            }
+
+            if (!walletAddress.startsWith('U') && !walletAddress.startsWith('E')) {
+                alert("Invalid TON wallet address. It should start with 'U' or 'E'. Please try again.");
+                return;
+            }
+
+            // Save the manually entered wallet address
+            document.getElementById('walletAddress').innerText = walletAddress;
+            document.getElementById('connectWalletButton').style.display = 'none';
+            document.getElementById('disconnectWalletButton').style.display = 'inline-flex';
+            saveWalletAddress(walletAddress);
+        }
+
+        async function disconnectWallet() {
+            try {
+                if (tonConnectUI) {
+                    await tonConnectUI.disconnect();
+                }
+                document.getElementById('walletAddress').innerText = 'Not linked';
+                document.getElementById('connectWalletButton').style.display = 'inline-flex';
+                document.getElementById('disconnectWalletButton').style.display = 'none';
+                alert("Wallet disconnected successfully!");
+            } catch (error) {
+                console.error('Wallet disconnection error:', error);
+                alert("Failed to disconnect wallet. Please try again.");
+            }
+        }
+
+        async function saveWalletAddress(walletAddress) {
+            try {
+                const response = await fetch(`${BASE_URL}/api/update_wallet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
+                });
+                const result = await response.json();
+                if (result.status !== "success") {
+                    alert(`Failed to save wallet address: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Error saving wallet address:', error);
+                alert("Failed to save wallet address. Please try again.");
+            }
+        }
 
         async function registerUser() {
             if (!userId) {
@@ -498,66 +610,15 @@
             }
         }
 
-        async function connectWallet() {
-            if (!userId) {
-                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
-                return;
-            }
-
-            if (!window.Telegram || !window.Telegram.WebApp) {
-                alert("This app must be opened inside Telegram to connect a wallet.");
-                return;
-            }
-
-            try {
-                tg.openTelegramLink('https://t.me/wallet?start=connect');
-                alert("Please complete the wallet connection in the @wallet bot. After connecting, copy your wallet address and return here to submit it.");
-
-                const walletAddress = prompt("Please enter your TON wallet address after connecting in @wallet bot:");
-                if (!walletAddress) {
-                    alert("No wallet address provided. Please try again.");
-                    return;
-                }
-
-                if (!walletAddress.startsWith('U') && !walletAddress.startsWith('E')) {
-                    alert("Invalid TON wallet address. It should start with 'U' or 'E'. Please try again.");
-                    return;
-                }
-
-                const response = await fetch(`${BASE_URL}/api/update_wallet`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
-                });
-                const result = await response.json();
-
-                if (result.status === "success") {
-                    alert("Wallet connected successfully!");
-                    document.getElementById('walletAddress').innerText = walletAddress;
-                } else {
-                    alert(`Failed to save wallet address: ${result.message}`);
-                }
-            } catch (error) {
-                console.error('Wallet connection error:', error);
-                alert("Failed to connect wallet. Please try again.");
-            }
-        }
-
         function initiateVerification() {
             if (!userId) {
                 alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
                 return;
             }
 
-            if (!window.Telegram || !window.Telegram.WebApp) {
-                alert("This app must be opened inside Telegram to verify.");
-                return;
-            }
-
             try {
                 const paymentLink = `ton://transfer/${ADMIN_WALLET_ADDRESS}?amount=${VERIFICATION_AMOUNT}`;
-                tg.openLink(paymentLink);
-                alert("Please send 1 TON for verification using Tonkeeper. After sending, return here and click 'Confirm Verification'.");
+                alert(`Please send 1 TON for verification. Copy this link and open it in Tonkeeper:\n\n${paymentLink}\n\nAfter sending, return here and click 'Confirm Verification'.`);
                 document.getElementById('verifyButton').style.display = 'none';
                 document.getElementById('confirmButton').style.display = 'inline-flex';
             } catch (error) {
