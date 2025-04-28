@@ -217,8 +217,8 @@
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- Add TON Connect SDK -->
-    <script src="https://unpkg.com/@tonconnect/sdk@3.0.0/dist/tonconnect-sdk.min.js"></script>
+    <!-- Add TON Connect SDK (latest version) -->
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
 </head>
 <body>
     <div class="background"></div>
@@ -527,27 +527,11 @@
                     return;
                 }
 
-                // Define wallet providers
-                const walletsList = await TonConnectSDK.getWallets();
-                const tonkeeper = walletsList.find(wallet => wallet.appName.toLowerCase() === 'tonkeeper');
-                const myTonWallet = walletsList.find(wallet => wallet.appName.toLowerCase() === 'mytonwallet');
-
-                // Prepare connection options
-                const connectOptions = {
-                    bridgeUrl: 'https://bridge.tonapi.io/bridge',
-                    walletsList: walletsList
-                };
-
-                if (tonkeeper) {
-                    connectOptions.universalLink = tonkeeper.universalLink;
-                } else if (myTonWallet) {
-                    connectOptions.universalLink = myTonWallet.universalLink;
-                } else {
-                    connectOptions.universalLink = 'https://app.tonkeeper.com/ton-connect';
-                }
-
-                // Initiate TON Connect
-                const connectRequest = tonConnect.connect(connectOptions);
+                // Simplified TON Connect configuration (targeting Tonkeeper)
+                const connectRequest = tonConnect.connect({
+                    universalLink: 'https://app.tonkeeper.com/ton-connect',
+                    bridgeUrl: 'https://bridge.tonapi.io/bridge'
+                });
 
                 // Open the universal link in Telegram
                 tg.openLink(connectRequest.universalLink);
@@ -585,8 +569,6 @@
                     alert("Failed to connect wallet: Manifest file issue. Please contact support.");
                 } else if (error.message.includes("timeout")) {
                     alert("Wallet connection timed out. Please ensure you have a TON wallet app installed and try again.");
-                } else if (error.message.includes("walletsList")) {
-                    alert("Failed to fetch wallet providers. Please check your internet connection and try again.");
                 } else {
                     alert("Failed to connect wallet. Please ensure you have a TON wallet app (e.g., Tonkeeper) installed, your Telegram app is updated, and try again.");
                 }
