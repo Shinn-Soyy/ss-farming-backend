@@ -1,5 +1,4 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -8,35 +7,32 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Database connection
-const db = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'your_username',
-    password: process.env.DB_PASSWORD || 'your_password',
-    database: process.env.DB_NAME || 'your_database'
-});
+// In-memory storage for users
+const users = {};
 
-// Test database connection
-db.getConnection()
-    .then(() => console.log('Connected to MySQL database'))
-    .catch(err => console.error('Database connection error:', err));
+// Default user data template
+const defaultUserData = {
+    balance: 0,
+    hash_rate: 1,
+    daily_farm_limit: 86400,
+    daily_farm_duration: 0,
+    wallet_address: null,
+    is_verified: false,
+    referrer_id: null
+};
 
 // Register a new user
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', (req, res) => {
     const { user_id, referrer_id } = req.body;
     try {
-        const [existingUser] = await db.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-        if (existingUser.length > 0) {
+        if (users[user_id]) {
             return res.json({ status: "success", message: "User already registered" });
         }
 
-        await db.query(
-            'INSERT INTO users (user_id, balance, hash_rate, daily_farm_limit, daily_farm_duration, referrer_id, is_verified) VALUES (?, 0, 1, 86400, 0, ?, FALSE)',
-            [user_id, referrer_id]
-        );
+        users[user_id] = { ...defaultUserData, user_id, referrer_id };
 
-        if (referrer_id) {
-            await db.query('UPDATE users SET balance = balance + 100 WHERE user_id = ?', [referrer_id]);
+        if (referrer_id && users[referrer_id]) {
+            users[referrer_id].balance += 100;
         }
 
         res.json({ status: "success", message: "User registered successfully" });
@@ -47,23 +43,23 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Get user data
-app.get('/api/user', async (req, res) => {
+app.get('/api/user', (req, res) => {
     const { user_id } = req.query;
     try {
-        const [user] = await db.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-        if (!user.length) {
+        const user = users[user_id];
+        if (!user) {
             return res.status(404).json({ status: "error", message: "User not found" });
         }
         res.json({
             status: "success",
             user: {
-                user_id: user[0].user_id,
-                balance: user[0].balance,
-                hash_rate: user[0].hash_rate,
-                wallet_address: user[0].wallet_address,
-                daily_farm_limit: user[0].daily_farm_limit,
-                daily_farm_duration: user[0].daily_farm_duration,
-                is_verified: user[0].is_verified
+                user_id: user.user_id,
+                balance: user.balance,
+                hash_rate: user.hash_rate,
+                wallet_address: user.wallet_address,
+                daily_farm_limit: user.daily_farm_limit,
+                daily_farm_duration: user.daily_farm_duration,
+                is_verified: user.is_verified
             }
         });
     } catch (error) {
@@ -73,10 +69,13 @@ app.get('/api/user', async (req, res) => {
 });
 
 // Update wallet address
-app.post('/api/update_wallet', async (req, res) => {
+app.post('/api/update_wallet', (req, res) => {
     const { user_id, wallet_address } = req.body;
     try {
-        await db.query('UPDATE users SET wallet_address = ? WHERE user_id = ?', [wallet_address, user_id]);
+        if (!users[user_id]) {
+            return res.status(404).json({ status: "error", message: "User not found" });
+        }
+        users[user_id].wallet_address = wallet_address;
         res.json({ status: "success", message: "Wallet address updated successfully" });
     } catch (error) {
         console.error('Error updating wallet address:', error);
@@ -85,10 +84,13 @@ app.post('/api/update_wallet', async (req, res) => {
 });
 
 // Verify user (new endpoint)
-app.post('/api/verify', async (req, res) => {
+app.post('/api/verify', (req, res) => {
     const { user_id } = req.body;
     try {
-        await db.query('UPDATE users SET is_verified = TRUE WHERE user_id = ?', [user_id]);
+        if (!users[user_id]) {
+            return res.status(404).json({ status: "error", message: "User not found" });
+        }
+        users[user_id].is_verified = true;
         res.json({ status: "success", message: "User verified successfully" });
     } catch (error) {
         console.error('Error verifying user:', error);
@@ -97,19 +99,19 @@ app.post('/api/verify', async (req, res) => {
 });
 
 // Claim points
-app.post('/api/claim', async (req, res) => {
+app.post('/api/claim', (req, res) => {
     const { user_id } = req.body;
     try {
-        const [user] = await db.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-        if (!user.length) {
+        const user = users[user_id];
+        if (!user) {
             return res.status(404).json({ status: "error", message: "User not found" });
         }
 
-        const hashRate = user[0].hash_rate;
+        const hashRate = user.hash_rate;
         const pointsPerHour = { 1: 50, 2: 100, 3: 200, 4: 300, 5: 500, 6: 700, 7: 900, 8: 1200, 9: 1500, 10: 2000 };
         const points = pointsPerHour[hashRate] || 50;
 
-        await db.query('UPDATE users SET balance = balance + ? WHERE user_id = ?', [points, user_id]);
+        user.balance += points;
         res.json({ status: "success", message: `${points} SS Points claimed successfully` });
     } catch (error) {
         console.error('Error claiming points:', error);
@@ -118,19 +120,19 @@ app.post('/api/claim', async (req, res) => {
 });
 
 // Farm points
-app.post('/api/farm', async (req, res) => {
+app.post('/api/farm', (req, res) => {
     const { user_id } = req.body;
     try {
-        const [user] = await db.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-        if (!user.length) {
+        const user = users[user_id];
+        if (!user) {
             return res.status(404).json({ status: "error", message: "User not found" });
         }
 
-        if (user[0].daily_farm_duration >= user[0].daily_farm_limit) {
+        if (user.daily_farm_duration >= user.daily_farm_limit) {
             return res.json({ status: "error", message: "Daily farming limit reached" });
         }
 
-        await db.query('UPDATE users SET daily_farm_duration = daily_farm_duration + 1 WHERE user_id = ?', [user_id]);
+        user.daily_farm_duration += 1;
         res.json({ status: "success", message: "Farming updated" });
     } catch (error) {
         console.error('Error farming:', error);
@@ -139,15 +141,15 @@ app.post('/api/farm', async (req, res) => {
 });
 
 // Boost hash rate
-app.post('/api/boost', async (req, res) => {
+app.post('/api/boost', (req, res) => {
     const { user_id, payment_method } = req.body;
     try {
-        const [user] = await db.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-        if (!user.length) {
+        const user = users[user_id];
+        if (!user) {
             return res.status(404).json({ status: "error", message: "User not found" });
         }
 
-        const currentHashRate = user[0].hash_rate;
+        const currentHashRate = user.hash_rate;
         if (currentHashRate >= 10) {
             return res.json({ status: "error", message: "Maximum hash rate reached" });
         }
@@ -171,12 +173,13 @@ app.post('/api/boost', async (req, res) => {
         }
 
         if (payment_method === "ss_points") {
-            if (user[0].balance < cost.ss_points) {
+            if (user.balance < cost.ss_points) {
                 return res.json({ status: "error", message: "Insufficient SS Points" });
             }
-            await db.query('UPDATE users SET balance = balance - ?, hash_rate = ? WHERE user_id = ?', [cost.ss_points, nextHashRate, user_id]);
+            user.balance -= cost.ss_points;
+            user.hash_rate = nextHashRate;
         } else {
-            await db.query('UPDATE users SET hash_rate = ? WHERE user_id = ?', [nextHashRate, user_id]);
+            user.hash_rate = nextHashRate;
         }
 
         res.json({ status: "success", message: `Hash rate upgraded to ${nextHashRate} GH/s` });
@@ -187,7 +190,7 @@ app.post('/api/boost', async (req, res) => {
 });
 
 // Get referral link
-app.get('/api/referral', async (req, res) => {
+app.get('/api/referral', (req, res) => {
     const { user_id } = req.query;
     try {
         const referralLink = `https://t.me/SS_Farming_Bot?start=${user_id}`;
@@ -199,7 +202,7 @@ app.get('/api/referral', async (req, res) => {
 });
 
 // Check membership (simplified for this example)
-app.get('/api/check_membership', async (req, res) => {
+app.get('/api/check_membership', (req, res) => {
     const { user_id } = req.query;
     try {
         res.json({ status: "success", is_member: true });
@@ -210,7 +213,7 @@ app.get('/api/check_membership', async (req, res) => {
 });
 
 // Get missions
-app.get('/api/missions', async (req, res) => {
+app.get('/api/missions', (req, res) => {
     const { user_id } = req.query;
     try {
         const missions = [
@@ -225,15 +228,20 @@ app.get('/api/missions', async (req, res) => {
 });
 
 // Complete mission
-app.post('/api/complete_mission', async (req, res) => {
+app.post('/api/complete_mission', (req, res) => {
     const { user_id, mission_type } = req.body;
     try {
+        const user = users[user_id];
+        if (!user) {
+            return res.status(404).json({ status: "error", message: "User not found" });
+        }
+
         const missionRewards = {
             "join_channel": 500,
             "follow_twitter": 300
         };
         const reward = missionRewards[mission_type] || 0;
-        await db.query('UPDATE users SET balance = balance + ? WHERE user_id = ?', [reward, user_id]);
+        user.balance += reward;
         res.json({ status: "success", message: `Mission completed! ${reward} SS Points rewarded` });
     } catch (error) {
         console.error('Error completing mission:', error);
