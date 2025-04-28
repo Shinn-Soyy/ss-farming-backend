@@ -207,8 +207,6 @@
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- Use a specific version of TON Connect SDK -->
-    <script src="https://unpkg.com/@tonconnect/sdk@3.0.0/dist/tonconnect-sdk.min.js"></script>
 </head>
 <body>
     <div class="background"></div>
@@ -321,11 +319,6 @@
             9: { ss_points: 15000, ton: 3.2 },
             10: { ss_points: 20000, ton: 4 }
         };
-
-        // Initialize TON Connect SDK
-        const tonConnect = new TonConnectSDK.TonConnect({
-            manifestUrl: 'https://fabulous-beijinho-b17e16.netlify.app/tonconnect-manifest.json'
-        });
 
         async function registerUser() {
             if (!userId) {
@@ -485,94 +478,53 @@
             }
 
             try {
-                // Try TON Connect SDK first
-                if (!tonConnect.connected) {
-                    const connectRequest = tonConnect.connect({
-                        universalLink: 'https://app.tonkeeper.com/ton-connect',
-                        bridgeUrl: 'https://bridge.tonapi.io/bridge'
-                    });
+                // Open Telegram's @wallet bot
+                const walletUrl = 'tg://resolve?domain=wallet&startattach=ton_connect';
+                tg.openLink(walletUrl);
 
-                    tg.openLink(connectRequest.universalLink);
+                // Set a timeout to handle cases where the wallet connection doesn't respond
+                const connectionTimeout = setTimeout(() => {
+                    alert("Wallet connection timed out. Please try again.");
+                }, 15000); // 15 seconds timeout
 
-                    const walletInfo = await connectRequest;
-                    const walletAddress = walletInfo.account.address;
+                // Listen for wallet connection result
+                tg.onEvent('web_app_data', async (data) => {
+                    clearTimeout(connectionTimeout); // Clear the timeout if we get a response
 
-                    if (walletAddress) {
-                        // Send wallet address to backend
-                        const response = await fetch(`${BASE_URL}/api/update_wallet`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
-                        });
-                        const result = await response.json();
+                    if (data && data.data) {
+                        try {
+                            const walletData = JSON.parse(data.data);
+                            const walletAddress = walletData.account?.address;
 
-                        if (result.status === "success") {
-                            alert("Wallet connected successfully!");
-                            document.getElementById('walletAddress').innerText = walletAddress;
-                            return;
-                        } else {
-                            throw new Error(`Failed to save wallet address: ${result.message}`);
-                        }
-                    } else {
-                        throw new Error("No wallet address received.");
-                    }
-                } else {
-                    alert("Wallet is already connected.");
-                    return;
-                }
-            } catch (error) {
-                console.error('TON Connect SDK error:', error);
+                            if (walletAddress) {
+                                // Send wallet address to backend
+                                const response = await fetch(`${BASE_URL}/api/update_wallet`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
+                                });
+                                const result = await response.json();
 
-                // Fallback to Telegram Wallet Connect
-                try {
-                    const telegramWalletUrl = 'tg://resolve?domain=wallet&startattach=ton-connect';
-                    tg.openLink(telegramWalletUrl);
-
-                    const connectionTimeout = setTimeout(() => {
-                        alert("Wallet connection timed out. Please try again.");
-                    }, 10000);
-
-                    tg.onEvent('web_app_data', async (data) => {
-                        clearTimeout(connectionTimeout);
-
-                        if (data && data.data) {
-                            try {
-                                const walletData = JSON.parse(data.data);
-                                const walletAddress = walletData.account?.address;
-
-                                if (walletAddress) {
-                                    const response = await fetch(`${BASE_URL}/api/update_wallet`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
-                                    });
-                                    const result = await response.json();
-
-                                    if (result.status === "success") {
-                                        alert("Wallet connected successfully via Telegram!");
-                                        document.getElementById('walletAddress').innerText = walletAddress;
-                                    } else {
-                                        alert(`Failed to save wallet address: ${result.message}`);
-                                    }
+                                if (result.status === "success") {
+                                    alert("Wallet connected successfully!");
+                                    document.getElementById('walletAddress').innerText = walletAddress;
                                 } else {
-                                    alert("No wallet address received from Telegram. Please try again.");
+                                    alert(`Failed to save wallet address: ${result.message}`);
                                 }
-                            } catch (error) {
-                                console.error('Error parsing Telegram wallet data:', error);
-                                alert("Failed to parse wallet data from Telegram. Please try again.");
+                            } else {
+                                alert("No wallet address received. Please try again.");
                             }
-                        } else {
-                            alert("No data received from Telegram wallet connection. Please try again.");
+                        } catch (error) {
+                            console.error('Error parsing wallet data:', error);
+                            alert("Failed to parse wallet data. Please try again.");
                         }
-                    });
-                } catch (telegramError) {
-                    console.error('Telegram Wallet Connect error:', telegramError);
-                    if (telegramError.message.includes("TON Connect") || telegramError.message.includes("wallet")) {
-                        alert("Failed to connect wallet. Please ensure you have a TON wallet app (e.g., Tonkeeper) installed.");
                     } else {
-                        alert("Failed to connect wallet. Please try again later.");
+                        alert("No data received from wallet connection. Please try again.");
                     }
-                }
+                });
+            } catch (error) {
+                console.error('Error initiating wallet connection:', error);
+                alert('Failed to initiate wallet connection. Please try again later.');
             }
         }
 
