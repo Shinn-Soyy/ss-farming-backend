@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SS Farming Mini App</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(30, 144, 255, 0.2) 0%, transparent 70%);
+            z-index: -1;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            padding: 20px;
+        }
+        .content {
+            display: none;
+        }
+        .content.active {
+            display: block;
+        }
+        .balance {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(30, 144, 255, 0.3);
+            margin: 20px 0;
+        }
+        .balance img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            filter: drop-shadow(0 0 5px #1e90ff);
+        }
+        .balance p {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .fan-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+        }
+        .fan {
+            width: 100%;
+            height: 100%;
+            background: url('https://i.ibb.co/5W1Yk5H/fan.png') no-repeat center center;
+            background-size: contain;
+            filter: drop-shadow(0 0 15px #1e90ff);
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .coin-balance {
+            font-size: 26px;
+            font-weight: 700;
+            margin: 20px 0;
+            background: linear-gradient(90deg, #1e90ff, #00ffea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 10px rgba(30, 144, 255, 0.5);
+        }
+        .hash-rate {
+            font-size: 16px;
+            color: #a0a0a0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hash-rate .info {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-color: #2a2a2a;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            margin-right: 5px;
+            box-shadow: 0 0 5px rgba(30, 144, 255, 0.3);
+        }
+        .hash-rate span:last-child {
+            color: #1e90ff;
+            font-weight: 600;
+            margin-left: 5px;
+            text-shadow: 0 0 5px #1e90ff;
+        }
+        .buttons {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: linear-gradient(45deg, #1e90ff, #00ffea);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 0 15px rgba(30, 144, 255, 0.5);
+            transition: transform 0.1s, box-shadow 0.3s;
+        }
+        .button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(30, 144, 255, 0.8);
+        }
+        .button img {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            filter: drop-shadow(0 0 5px #ffffff);
+        }
+        .claim-timer {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-top: 10px;
+        }
+        .farm-limit {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-top: 10px;
+        }
+        .tabs {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 20px;
+            position: fixed;
+            bottom: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 0 15px rgba(30, 144, 255, 0.3);
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background 0.3s;
+        }
+        .tab.active {
+            background: linear-gradient(45deg, #1e90ff, #00ffea);
+            box-shadow: 0 0 10px rgba(30, 144, 255, 0.5);
+        }
+        .tab img {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin-right: 5px;
+            filter: drop-shadow(0 0 5px #ffffff);
+        }
+        .tab span {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .card {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 15px;
+            margin: 10px 0;
+            box-shadow: 0 0 10px rgba(30, 144, 255, 0.3);
+        }
+        .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            background: linear-gradient(90deg, #1e90ff, #00ffea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .payment-options {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Use a specific version of TON Connect SDK -->
+    <script src="https://unpkg.com/@tonconnect/sdk@3.0.0/dist/tonconnect-sdk.min.js"></script>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <div id="home" class="content active">
+            <div class="balance">
+                <img src="https://i.ibb.co/5W1Yk5H/icon.png" alt="Icon">
+                <p>Balance: <span id="balance">0</span> SS Points</p>
+            </div>
+            <div class="fan-container">
+                <div id="fan" class="fan"></div>
+            </div>
+            <div class="coin-balance" id="coinBalance">0 SS Coins</div>
+            <div class="hash-rate">
+                <span class="info">i</span>
+                <span id="hashRate">1</span> GH/s
+                <span>⚡</span>
+            </div>
+            <div class="buttons">
+                <button class="button" onclick="claim()">
+                    <img src="https://i.ibb.co/5W1Yk5H/claim.png" alt="Claim"> Claim
+                </button>
+                <button class="button" onclick="showBoostOptions()">
+                    <img src="https://i.ibb.co/5W1Yk5H/boost.png" alt="Boost"> Boost
+                </button>
+            </div>
+            <div class="claim-timer" id="claimTimer">Next 1 Point in: Calculating...</div>
+            <div class="farm-limit" id="farmLimit">Farming Limit: Calculating...</div>
+        </div>
+        <div id="wallet" class="content">
+            <div class="card">
+                <h3>Wallet 💳</h3>
+                <p>Wallet Address: <span id="walletAddress">Not linked</span></p>
+                <p>Balance: <span id="walletBalance">0</span> SS Points</p>
+                <p>SS Coins: <span id="walletCoinBalance">0</span> SS Coins</p>
+                <button class="button" onclick="connectWallet()">Connect Wallet</button>
+            </div>
+        </div>
+        <div id="friends" class="content">
+            <div class="card">
+                <h3>Friends 👥</h3>
+                <p>Invite friends to earn more SS Points!</p>
+                <p>Referral Link: <span id="referralLink">Loading...</span></p>
+                <button class="button" onclick="copyReferralLink()">Copy Link</button>
+            </div>
+        </div>
+        <div id="missions" class="content">
+            <div id="missionsList"></div>
+        </div>
+        <div id="more" class="content">
+            <div class="card">
+                <h3>More ℹ️</h3>
+                <p>SS Farming Mini App</p>
+                <p>Version: 1.0.0</p>
+                <p>Support: @SS_Support</p>
+                <button class="button" onclick="checkUpdates()">Check for Updates</button>
+            </div>
+        </div>
+    </div>
+    <div class="tabs">
+        <div class="tab" onclick="showTab('wallet')">
+            <img src="https://i.ibb.co/5W1Yk5H/wallet.png" alt="Wallet"> <span>Wallet</span>
+        </div>
+        <div class="tab" onclick="showTab('friends')">
+            <img src="https://i.ibb.co/5W1Yk5H/friends.png" alt="Friends"> <span>Friends</span>
+        </div>
+        <div class="tab active" onclick="showTab('home')">
+            <img src="https://i.ibb.co/5W1Yk5H/home.png" alt="Home"> <span>Home</span>
+        </div>
+        <div class="tab" onclick="showTab('missions')">
+            <img src="https://i.ibb.co/5W1Yk5H/missions.png" alt="Missions"> <span>Missions</span>
+        </div>
+        <div class="tab" onclick="showTab('more')">
+            <img src="https://i.ibb.co/5W1Yk5H/more.png" alt="More"> <span>More</span>
+        </div>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let userId = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+        const startParam = tg.initDataUnsafe.start_param;
+        let referrerId = startParam || null;
+
+        const BASE_URL = "https://ss-farming-backend-1.onrender.com";
+
+        const HASH_RATE_POINTS = {
+            1: 50,
+            2: 100,
+            3: 200,
+            4: 300,
+            5: 500,
+            6: 700,
+            7: 900,
+            8: 1200,
+            9: 1500,
+            10: 2000
+        };
+
+        const BOOST_COSTS = {
+            2: { ss_points: 1000, ton: 0 },
+            3: { ss_points: 2000, ton: 0 },
+            4: { ss_points: 3000, ton: 0 },
+            5: { ss_points: 6000, ton: 0.5 },
+            6: { ss_points: 8000, ton: 1 },
+            7: { ss_points: 10000, ton: 2 },
+            8: { ss_points: 12000, ton: 2.5 },
+            9: { ss_points: 15000, ton: 3.2 },
+            10: { ss_points: 20000, ton: 4 }
+        };
+
+        // Initialize TON Connect SDK
+        const tonConnect = new TonConnectSDK.TonConnect({
+            manifestUrl: 'https://fabulous-beijinho-b17e16.netlify.app/tonconnect-manifest.json'
+        });
+
+        async function registerUser() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, referrer_id: referrerId })
+                });
+                const data = await response.json();
+                console.log(data.message);
+            } catch (error) {
+                console.error('Error registering user:', error);
+                alert('Failed to connect to the server. Please try again later.');
+            }
+        }
+
+        async function updateUI() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/user?user_id=${userId}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                if (data.status === "error") {
+                    throw new Error(data.message);
+                }
+                const userData = data.user;
+                document.getElementById('balance').innerText = userData.balance.toFixed(2);
+                document.getElementById('hashRate').innerText = userData.hash_rate;
+                document.getElementById('coinBalance').innerText = userData.balance.toFixed(2) + ' SS Coins';
+
+                document.getElementById('walletBalance').innerText = userData.balance.toFixed(2);
+                document.getElementById('walletCoinBalance').innerText = userData.balance.toFixed(2);
+                document.getElementById('walletAddress').innerText = userData.wallet_address || "Not linked";
+
+                const hashRate = parseInt(userData.hash_rate);
+                const pointsPerHour = HASH_RATE_POINTS[hashRate];
+                const secondsPerPoint = 3600 / pointsPerHour;
+                const minutes = Math.floor(secondsPerPoint / 60);
+                const seconds = Math.ceil(secondsPerPoint % 60);
+                document.getElementById('claimTimer').innerText = `Next 1 Point in: ${minutes}m ${seconds}s`;
+
+                const remainingSeconds = userData.daily_farm_limit - userData.daily_farm_duration;
+                const hours = Math.floor(remainingSeconds / 3600);
+                const mins = Math.floor((remainingSeconds % 3600) / 60);
+                document.getElementById('farmLimit').innerText = `Farming Limit: ${hours}h ${mins}m remaining`;
+            } catch (error) {
+                console.error('Error updating UI:', error);
+                alert('Failed to fetch user data. Please try again later.');
+            }
+        }
+
+        async function claim() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await response.json();
+                alert(data.message);
+                if (data.status === "success") {
+                    updateUI();
+                    await fetch(`${BASE_URL}/api/farm`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: userId })
+                    });
+                }
+            } catch (error) {
+                console.error('Error claiming:', error);
+                alert('Failed to claim points. Please try again later.');
+            }
+        }
+
+        function showBoostOptions() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            const currentHashRate = parseInt(document.getElementById('hashRate').innerText);
+            if (currentHashRate >= 10) {
+                alert("Maximum hash rate reached (10 GH/s)");
+                return;
+            }
+
+            const nextHashRate = currentHashRate + 1;
+            const cost = BOOST_COSTS[nextHashRate];
+            if (!cost) {
+                alert("Invalid hash rate upgrade");
+                return;
+            }
+
+            let message = `Upgrade to ${nextHashRate} GH/s?\n`;
+            message += `Cost: ${cost.ss_points} SS Points`;
+            if (cost.ton > 0) {
+                message += ` or ${cost.ton} TON`;
+            }
+
+            let paymentMethod = "ss_points";
+            if (cost.ton > 0) {
+                const choice = confirm(`${message}\n\nOK for SS Points, Cancel for TON`);
+                paymentMethod = choice ? "ss_points" : "ton";
+            } else {
+                if (!confirm(message)) {
+                    return;
+                }
+            }
+
+            boost(paymentMethod);
+        }
+
+        async function boost(paymentMethod) {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/boost`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, payment_method: paymentMethod })
+                });
+                const data = await response.json();
+                alert(data.message);
+                if (data.status === "success") {
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Error boosting:', error);
+                alert('Failed to boost hash rate. Please try again later.');
+            }
+        }
+
+        async function connectWallet() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+
+            // Check if the app is running inside Telegram
+            if (!window.Telegram || !window.Telegram.WebApp) {
+                alert("This app must be opened inside Telegram to connect a wallet.");
+                return;
+            }
+
+            try {
+                // Try TON Connect SDK first
+                if (!tonConnect.connected) {
+                    const connectRequest = tonConnect.connect({
+                        universalLink: 'https://app.tonkeeper.com/ton-connect',
+                        bridgeUrl: 'https://bridge.tonapi.io/bridge'
+                    });
+
+                    tg.openLink(connectRequest.universalLink);
+
+                    const walletInfo = await connectRequest;
+                    const walletAddress = walletInfo.account.address;
+
+                    if (walletAddress) {
+                        // Send wallet address to backend
+                        const response = await fetch(`${BASE_URL}/api/update_wallet`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
+                        });
+                        const result = await response.json();
+
+                        if (result.status === "success") {
+                            alert("Wallet connected successfully!");
+                            document.getElementById('walletAddress').innerText = walletAddress;
+                            return;
+                        } else {
+                            throw new Error(`Failed to save wallet address: ${result.message}`);
+                        }
+                    } else {
+                        throw new Error("No wallet address received.");
+                    }
+                } else {
+                    alert("Wallet is already connected.");
+                    return;
+                }
+            } catch (error) {
+                console.error('TON Connect SDK error:', error);
+
+                // Fallback to Telegram Wallet Connect
+                try {
+                    const telegramWalletUrl = 'tg://resolve?domain=wallet&startattach=ton-connect';
+                    tg.openLink(telegramWalletUrl);
+
+                    const connectionTimeout = setTimeout(() => {
+                        alert("Wallet connection timed out. Please try again.");
+                    }, 10000);
+
+                    tg.onEvent('web_app_data', async (data) => {
+                        clearTimeout(connectionTimeout);
+
+                        if (data && data.data) {
+                            try {
+                                const walletData = JSON.parse(data.data);
+                                const walletAddress = walletData.account?.address;
+
+                                if (walletAddress) {
+                                    const response = await fetch(`${BASE_URL}/api/update_wallet`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ user_id: userId, wallet_address: walletAddress })
+                                    });
+                                    const result = await response.json();
+
+                                    if (result.status === "success") {
+                                        alert("Wallet connected successfully via Telegram!");
+                                        document.getElementById('walletAddress').innerText = walletAddress;
+                                    } else {
+                                        alert(`Failed to save wallet address: ${result.message}`);
+                                    }
+                                } else {
+                                    alert("No wallet address received from Telegram. Please try again.");
+                                }
+                            } catch (error) {
+                                console.error('Error parsing Telegram wallet data:', error);
+                                alert("Failed to parse wallet data from Telegram. Please try again.");
+                            }
+                        } else {
+                            alert("No data received from Telegram wallet connection. Please try again.");
+                        }
+                    });
+                } catch (telegramError) {
+                    console.error('Telegram Wallet Connect error:', telegramError);
+                    if (telegramError.message.includes("TON Connect") || telegramError.message.includes("wallet")) {
+                        alert("Failed to connect wallet. Please ensure you have a TON wallet app (e.g., Tonkeeper) installed.");
+                    } else {
+                        alert("Failed to connect wallet. Please try again later.");
+                    }
+                }
+            }
+        }
+
+        async function loadReferral() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/referral?user_id=${userId}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    document.getElementById('referralLink').innerText = data.referral_link;
+                } else {
+                    document.getElementById('referralLink').innerText = "Failed to load referral link";
+                }
+            } catch (error) {
+                console.error('Error loading referral:', error);
+                document.getElementById('referralLink').innerText = "Failed to load referral link";
+            }
+        }
+
+        async function copyReferralLink() {
+            const referralLink = document.getElementById('referralLink').innerText;
+            if (referralLink === "Loading..." || referralLink === "Failed to load referral link") {
+                alert("Referral link is not ready yet. Please try again later.");
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(referralLink);
+                alert("Referral link copied to clipboard!");
+            } catch (error) {
+                console.error('Error copying referral link:', error);
+                alert("Failed to copy referral link. Please copy it manually.");
+            }
+        }
+
+        async function loadMissions() {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/missions?user_id=${userId}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    let missionsList = '';
+                    data.missions.forEach(mission => {
+                        missionsList += `<div class="card"><h3>${mission.name}</h3>`;
+                        if (mission.status === "Not Completed") {
+                            missionsList += `<p>Reward: ${mission.reward} SS Points</p>`;
+                            if (mission.link) {
+                                missionsList += `<a href="${mission.link}" target="_blank" style="color: #1e90ff;">Go to Link</a><br>`;
+                            }
+                            if (mission.mission_type === "join_channel") {
+                                missionsList += `<button class="button" onclick="checkMembership('${mission.mission_type}')">Complete</button>`;
+                            } else {
+                                missionsList += `<button class="button" onclick="completeMission('${mission.mission_type}')">Complete</button>`;
+                            }
+                        } else {
+                            missionsList += `<p>Status: Completed ✅</p>`;
+                        }
+                        missionsList += `</div>`;
+                    });
+                    document.getElementById('missionsList').innerHTML = missionsList;
+                } else {
+                    document.getElementById('missionsList').innerHTML = '<p>Failed to load missions</p>';
+                }
+            } catch (error) {
+                console.error('Error loading missions:', error);
+                document.getElementById('missionsList').innerHTML = '<p>Failed to load missions</p>';
+            }
+        }
+
+        async function checkMembership(missionType) {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/check_membership?user_id=${userId}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    if (data.is_member) {
+                        completeMission(missionType);
+                    } else {
+                        alert("Please join the Telegram channel to complete this mission.");
+                    }
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                console.error('Error checking membership:', error);
+                alert('Failed to check membership. Please try again later.');
+            }
+        }
+
+        async function completeMission(missionType) {
+            if (!userId) {
+                alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/complete_mission`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, mission_type: missionType })
+                });
+                const data = await response.json();
+                alert(data.message);
+                if (data.status === "success") {
+                    updateUI();
+                    loadMissions();
+                }
+            } catch (error) {
+                console.error('Error completing mission:', error);
+                alert('Failed to complete mission. Please try again later.');
+            }
+        }
+
+        function checkUpdates() {
+            alert("You are using the latest version (1.0.0) of SS Farming Mini App!");
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(content => content.classList.remove('active'));
+
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'home' || tabName === 'wallet') {
+                updateUI();
+            } else if (tabName === 'friends') {
+                loadReferral();
+            } else if (tabName === 'missions') {
+                loadMissions();
+            }
+        }
+
+        if (!userId) {
+            alert("Cannot retrieve Telegram user ID. Please use this app via Telegram.");
+        } else {
+            registerUser();
+            updateUI();
+            fetch(`${BASE_URL}/api/farm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId })
+            }).catch(error => {
+                console.error('Error starting farm:', error);
+                alert('Failed to start farming. Please try again later.');
+            });
+
+            setInterval(updateUI, 10000);
+        }
+    </script>
+</body>
+</html>
